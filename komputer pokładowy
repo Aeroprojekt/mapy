@@ -1,0 +1,99 @@
+Jasne, zaprojektowanie mini komputera pokładowego do rakiety wodnej na bazie ESP32-S3 Mini i MPU-6050 to świetny pomysł! Taki system pozwoli na zbieranie danych lotu, a nawet na sterowanie pewnymi funkcjami. Poniżej przedstawiam propozycję komponentów, schematu logicznego oraz ogólne wskazówki.
+
+Proponowane komponenty
+Oto lista komponentów, które będą niezbędne do zbudowania Twojego komputera pokładowego:
+
+Płytka deweloperska: ESP32-S3 Mini (lub podobna płytka z ESP32-S3). Wybierz wersję z wbudowanym USB, aby ułatwić programowanie i zasilanie.
+Akcelerometr/Żyroskop: MPU-6050 (moduł z wbudowanym regulatorem napięcia, np. GY-521). Ten czujnik dostarczy danych o orientacji i przyspieszeniu rakiety.
+Karta microSD: Moduł czytnika kart microSD (np. z interfejsem SPI) do zapisu danych lotu.
+Bateria: Mała bateria LiPo 3.7V (np. 300-500 mAh) z modułem ładowania (np. TP4056). Upewnij się, że moduł ładowania ma zabezpieczenie przed nadmiernym rozładowaniem.
+Konwerter napięcia: Jeśli będziesz używać komponentów działających na 5V (np. niektóre moduły GPS), a ESP32-S3 Mini działa na 3.3V, konieczny będzie konwerter napięcia (step-up) z 3.7V na 5V. Dla większości komponentów 3.3V bezpośrednio z ESP32-S3 będzie wystarczające.
+Przewody połączeniowe: Wystarczająco cienkie i elastyczne przewody, aby zmieściły się w rakiecie.
+Opcjonalnie (ale bardzo przydatne):
+Barometr/Czujnik wysokości: BMP280 lub BME280 (mierzy ciśnienie atmosferyczne, co pozwala obliczyć wysokość). To kluczowy element do monitorowania lotu rakiety.
+Moduł GPS: Mały moduł GPS (np. Neo-6M) do śledzenia pozycji rakiety po lądowaniu. Pamiętaj, że w rakiecie wodnej jego dokładność w trakcie lotu może być ograniczona ze względu na ruch i środowisko.
+Dioda LED: Mała dioda LED do sygnalizacji statusu (np. start zapisu danych, błąd).
+Przycisk: Mały przycisk do startu/zatrzymania zapisu danych lub resetowania.
+Schemat logiczny połączeń (przykładowy)
+Poniżej przedstawiam uproszczony schemat połączeń. Pamiętaj, aby zawsze sprawdzić specyfikację pinów Twojej konkretnej płytki ESP32-S3 Mini i modułów.
+
+       ESP32-S3 Mini
+       +-----------+
+       |           |
+       |  GPIO (SCL)|----- SCL ------+ MPU-6050
+       |  GPIO (SDA)|----- SDA ------+ (I2C)
+       |           |
+       |  GPIO (SCK)|----- SCK ------+ Moduł MicroSD
+       |  GPIO (MOSI)|----- MOSI -----+ (SPI)
+       |  GPIO (MISO)|----- MISO -----+
+       |  GPIO (CS) |----- CS -------+
+       |           |
+       |  3.3V     |----- VCC ------+ MPU-6050
+       |           |----- VCC ------+ Moduł MicroSD
+       |  GND      |----- GND ------+ MPU-6050
+       |           |----- GND ------+ Moduł MicroSD
+       |           |
+       |           |
+       |  (Zasilanie)
+       |           |
+       +-----------+
+             |
+             |
+             +---- VCC do TP4056 (Zasilanie z baterii)
+             |
+             +---- GND do TP4056
+             |
+             +---- Wyjście TP4056 (Vout) do 5V (lub 3.3V) na ESP32-S3 Mini
+Zasilanie: Wyjście z modułu ładowania TP4056 podłącz do pinu zasilania ESP32-S3 Mini (zazwyczaj 5V lub 3.3V, sprawdź dokumentację płytki). Upewnij się, że moduły MPU-6050 i microSD są zasilane odpowiednim napięciem (zazwyczaj 3.3V z ESP32-S3 Mini lub z zewnętrznego regulatora, jeśli używasz 5V).
+MPU-6050: Łączy się przez interfejs I2C. Potrzebujesz dwóch pinów GPIO (SCL i SDA) na ESP32-S3 Mini.
+Moduł MicroSD: Łączy się przez interfejs SPI. Potrzebujesz czterech pinów GPIO (SCK, MOSI, MISO, CS - Chip Select).
+Czujnik BMP280/BME280 (opcjonalnie): Również łączy się przez I2C, więc możesz podłączyć go do tych samych pinów SCL/SDA co MPU-6050.
+Moduł GPS (opcjonalnie): Łączy się zazwyczaj przez UART (RX, TX). Będziesz potrzebować dwóch innych pinów GPIO na ESP32-S3 Mini.
+Oprogramowanie (szkic)
+Programowanie odbywać się będzie w środowisku Arduino IDE z zainstalowanym pakietem dla ESP32.
+
+Główne funkcje oprogramowania:
+
+Inicjalizacja:
+
+Konfiguracja pinów GPIO.
+Inicjalizacja komunikacji I2C (dla MPU-6050 i BMP280/BME280).
+Inicjalizacja komunikacji SPI (dla karty microSD).
+Inicjalizacja karty microSD i otwarcie pliku do zapisu danych.
+(Opcjonalnie) Inicjalizacja UART dla GPS.
+Pętla główna (loop):
+
+Odczyt danych z MPU-6050:
+Odczyt przyspieszeń (X, Y, Z).
+Odczyt prędkości kątowych (Roll, Pitch, Yaw).
+Obliczenie orientacji (np. za pomocą filtru Kalmana lub algorytmu Madgwicka, aby uzyskać stabilne dane o obrocie rakiety).
+Odczyt danych z BMP280/BME280 (jeśli jest):
+Odczyt ciśnienia atmosferycznego.
+Obliczenie wysokości na podstawie ciśnienia i temperatury (np. za pomocą wzoru barometrycznego).
+Odczyt danych z GPS (jeśli jest):
+Odczyt pozycji (szerokość, długość geograficzna), wysokości, prędkości.
+Zapis danych:
+Sformatowanie zebranych danych (np. timestamp, przyspieszenia, kąty, wysokość, GPS) do pliku CSV na karcie microSD.
+Zapis danych w odpowiednich odstępach czasu (np. co 10-50 ms).
+Zarządzanie stanem lotu:
+Możesz zaimplementować prosty algorytm do wykrywania startu (np. gwałtowny wzrost przyspieszenia w osi Z) i lądowania (np. ustabilizowanie się wysokości i przyspieszeń).
+W zależności od fazy lotu, możesz zmieniać częstotliwość zapisu danych lub aktywować inne funkcje (np. uruchomienie serwomechanizmu do wypuszczenia spadochronu, jeśli rakieta ma taki mechanizm).
+Obsługa błędów:
+
+Sprawdzanie, czy karta microSD została prawidłowo zainicjalizowana.
+Obsługa błędów odczytu z czujników.
+Biblioteki Arduino:
+
+Wire.h do komunikacji I2C (dla MPU-6050, BMP280).
+SPI.h do komunikacji SPI (dla karty microSD).
+SD.h do obsługi karty microSD.
+Adafruit_MPU6050.h (lub podobna) do łatwiejszej obsługi MPU-6050.
+Adafruit_BMP280.h (lub podobna) do obsługi BMP280.
+TinyGPSPlus.h (lub podobna) do obsługi modułu GPS.
+Wskazówki dotyczące budowy i integracji
+Minimalizacja rozmiaru i wagi: Rakiety wodne mają ograniczone miejsce. Staraj się używać jak najmniejszych modułów i przycinać przewody do niezbędnej długości.
+Zabezpieczenie przed wodą: Cała elektronika musi być skutecznie zabezpieczona przed wodą. Rozważ zastosowanie wodoodpornej obudowy lub pokrycie płytki lakierem do elektroniki.
+Montaż: Zamocuj komponenty wewnątrz rakiety tak, aby były stabilne i nie przesuwały się podczas startu i lotu. Upewnij się, że MPU-6050 jest zamocowany w osi rakiety, aby dane były spójne.
+Testowanie: Przed pierwszym lotem rakiety wodnej dokładnie przetestuj komputer pokładowy na ziemi. Sprawdź, czy dane są poprawnie zapisywane na karcie microSD i czy czujniki działają prawidłowo.
+Pobór mocy: Bateria LiPo 300-500 mAh powinna wystarczyć na kilka lotów, ale monitoruj zużycie energii, zwłaszcza jeśli dodasz moduł GPS.
+Mam nadzieję, że ten szczegółowy plan pomoże Ci w budowie Twojego mini komputera pokładowego do rakiety wodnej! Jeśli masz jakieś pytania dotyczące konkretnych elementów lub programowania, śmiało pytaj.
